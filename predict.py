@@ -23,7 +23,7 @@ def main():
     
     #save the pridictions
     pd.DataFrame(predictions, columns=['Predicted Price']).to_csv(
-    'predictions.csv', index=False)
+    'data\predictions.csv', index=False)
     print(f"Predictions saved :)")
 
 if __name__ == "__main__":

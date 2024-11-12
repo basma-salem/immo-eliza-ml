@@ -22,16 +22,16 @@ class DataProcessor:
             self.df.fillna(value=np.nan, inplace=True)
         
         # Drop columns with low correlation to the target
-        self.df = self.df.drop(columns=['epc', 'region', 'locality', 'latitude', 'longitude',
+        self.df = self.df.drop(columns=['region', 'locality', 'latitude', 'longitude',
                                         'cadastral_income', 'subproperty_type', 'fl_open_fire',
-                                        'construction_year', 'fl_double_glazing', 'id',
+                                        'construction_year','primary_energy_consumption_sqm',  'fl_double_glazing', 'id',
                                         'fl_floodzone', 'equipped_kitchen', 'fl_furnished',
                                         'fl_garden', 'fl_terrace', 'fl_swimming_pool'])
         
         # Remove rows with specific missing categorical values
         self.df_cleaned = self.df[~self.df['heating_type'].isin(['MISSING'])]
         self.df_cleaned = self.df_cleaned[~self.df_cleaned['state_building'].isin(['MISSING'])]
-        self.df_cleaned = self.df_cleaned[~self.df_cleaned['primary_energy_consumption_sqm'].isna()]
+        self.df_cleaned = self.df_cleaned[~self.df_cleaned['epc'].isin(['MISSING'])]
 
     def preprocess_numeric_features(self):
         """Handle numeric features, including missing value imputation."""
@@ -46,7 +46,6 @@ class DataProcessor:
         property_type = self.df_cleaned[['property_type']]
         enc = OneHotEncoder(drop='first', sparse_output=False).set_output(transform="pandas")
         property_type_encoded = enc.fit_transform(property_type)
-        
         # Ensure matching indexes before joining
         property_type_encoded.index = self.df_numeric.index
         self.df_numeric = self.df_numeric.join(property_type_encoded)
@@ -68,6 +67,7 @@ class DataProcessor:
         building_state_encoded_df = pd.DataFrame(
             building_state_encoded, columns=['state_building'], index=self.df_numeric.index
         )
+        building_state_encoded_df.index = self.df_numeric.index
         self.df_numeric = self.df_numeric.join(building_state_encoded_df)
 
         # Map the 'heating_type' column to an ordinal scale
@@ -78,7 +78,36 @@ class DataProcessor:
         heat_type_encoded = self.df_cleaned['heating_type'].map(energy_order)
         heat_type_encoded.index = self.df_numeric.index
         self.df_numeric = self.df_numeric.join(heat_type_encoded.rename("heating_type"))
+        
+        # Ordinal encode the 'province' column
+        province = self.df_cleaned[["province"]]
+        enc = OneHotEncoder(drop='first', sparse_output=False).set_output(transform="pandas")
+        province_encoded = enc.fit_transform(province)
+        # Make sure indexes match before joining to avoid NaN when joining
+        province_encoded.index =  self.df_numeric.index 
+        self.df_numeric = self.df_numeric.join(province_encoded)
 
+        # Ordinal encode the 'epc' column
+        epc = self.df_cleaned[['epc']]
+        epc_hierarchy = [
+            'G', 
+            'F', 
+            'E', 
+            'D',
+            'C',
+            'B',
+            'A',
+            'A+',
+            'A++',
+        ]
+        encoder = OrdinalEncoder(categories=[epc_hierarchy])
+        epc_encoded = encoder.fit_transform(epc)
+
+        epc_encoded_df = pd.DataFrame(
+            epc_encoded, columns=['epc'], index=self.df_numeric.index
+        )
+        epc_encoded_df.index =  self.df_numeric.index 
+        self.df_numeric = self.df_numeric.join(epc_encoded_df)
 
     def preprocess(self):
         """Execute all steps and return the final processed DataFrame."""
